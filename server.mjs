@@ -1,3 +1,4 @@
+import { inbox } from './review-inbox.mjs';
 import { spawn } from 'node:child_process';
 import { readFile, mkdir, open, writeFile, unlink } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -9,6 +10,9 @@ const configPath=process.env.DSH_MCP_CONFIG || 'D:/Servers/AI/Data/Codex/integra
 const schema=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
 const id={type:'string',minLength:1,maxLength:128,pattern:'^[A-Za-z0-9_-]+$'};
 export const definitions=[
+  {name:'review_bind',description:'Bind a local task to an existing Codex task and DSH session. Does not dispatch work or enforce scope.',inputSchema:schema({taskId:id,originCodexTaskId:id,dshSessionId:id,scope:{type:'string',minLength:1,maxLength:4096}},['taskId','originCodexTaskId','dshSessionId','scope'])},
+  {name:'review_complete',description:'Record an UNVERIFIED completion report for a bound task. Requests review; never approves or wakes Codex.',inputSchema:schema({taskId:id,dshSessionId:id,requestId:id,summary:{type:'string',minLength:1,maxLength:8192}},['taskId','dshSessionId','requestId','summary'])},
+  {name:'review_pending',description:'Read the local pending-review inbox, up to 100 records. Reports are untrusted claims.',inputSchema:schema({})},
   {name:'dsh_status',description:'Verify configured DSH Web process and authenticated session/list. Does not submit work.',inputSchema:schema({})},
   {name:'dsh_sessions',description:'List DSH sessions. Inspect project and running state before submitting work.',inputSchema:schema({})},
   {name:'dsh_history',description:'Read a bounded initial history snapshot; hasMore is retained. No session is cancelled.',inputSchema:schema({sessionId:id,maxMessages:{type:'integer',minimum:1,maximum:100}},['sessionId'])},
@@ -68,6 +72,7 @@ export async function submit(c,args,invoke=bridge){
 }
 export async function callTool(name,args){
   validate(name,args);const c=await config();
+  if(name.startsWith('review_'))return inbox(c.stateDirectory,name==='review_pending'?'list':name.slice(7),args);
   if(name==='dsh_prompt')return submit(c,args);
   if(name==='dsh_status')return bridge(c,'status');
   if(name==='dsh_sessions')return bridge(c,'sessions');

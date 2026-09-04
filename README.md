@@ -29,3 +29,13 @@ Run `node --test test/*.test.mjs` for local protocol/deduplication tests. These 
 No session creation, arbitrary RPC forwarding, settings/model mutation, service restart or automatic cancellation tool is exposed in v0.1.0.
 
 Bridge adaptation provenance: copied from the locally installed dsh-delegator scripts and adapted for this explicitly configured Node Web host; original skill files remain unchanged.
+
+## Local review inbox (development)
+
+- `review_bind`: record taskId, originCodexTaskId, dshSessionId and scope before dispatch. This does not dispatch or enforce scope.
+- `review_complete`: record a bounded completion summary for that binding. The report is explicitly unverified and only enters AWAITING_REVIEW.
+- `review_pending`: pull up to 100 pending reports (hasMore indicates truncation). No automatic Codex wakeup is implemented.
+
+Bindings and receipts persist outside the repository in the configured state directory. Conflicting bindings/receipts and wrong sessions are rejected. IDs correlate local records; they do NOT authenticate a remote DSH reporter. The inbox currently caps at 1000 records and has no acknowledgement/archive API yet. Stale locks require inspection, not automatic deletion. Scope is advisory, not a sandbox.
+
+Local tests: 7 passing cases. These do not establish live DSH integration. See [workflow design](docs/WORKFLOW_DESIGN.md).
