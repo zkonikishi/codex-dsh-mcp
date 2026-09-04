@@ -1,0 +1,16 @@
+node_modules/
+*.log
+auth*.json
+state/
+connection.json
+config.json
+*.toml
+*.patch
+*.zip
+*.key
+*.pem
+.env
+.env.*
+receipts/
+locks/
+prompt-*.txt
