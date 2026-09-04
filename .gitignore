@@ -14,3 +14,7 @@ config.json
 receipts/
 locks/
 prompt-*.txt
+ticket-*.json
+receipt-*.json
+result-*.json
+tasks.json

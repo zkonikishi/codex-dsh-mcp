@@ -1,9 +1,10 @@
+import { tmpdir } from 'node:os';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {inbox} from '../review-inbox.mjs';
 test('durable binding and completion are idempotent and never imply approval',async()=>{
- const dir=await mkdtemp('D:/Servers/AI/Data/Temp/dsh-inbox-');
+ const dir=await mkdtemp(tmpdir()+'/dsh-inbox-');
  try {
  const binding={taskId:'t',originCodexTaskId:'c',dshSessionId:'s',scope:'Only README'};
  assert.equal((await inbox(dir,'bind',binding)).state,'BOUND');

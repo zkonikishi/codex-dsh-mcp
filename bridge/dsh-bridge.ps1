@@ -48,6 +48,14 @@ try {
       @{sessionId=$SessionId;requestId=$RequestId;projectPath=$resolved;created=$true;accepted=($Action -eq 'delegate')} | ConvertTo-Json
     }
     'prompt' {
+      $listing=Invoke-DshRpc $connection 'session/list' @{_request=@{}}
+      $matched=@($listing.items | Where-Object {$_.sessionId -ceq $SessionId})
+      if ($matched.Count -ne 1 -or $matched[0].running) { throw 'DSH_SESSION_BUSY_OR_MISSING' }
+      $control=Read-DshStreamItem $connection 'session/control' @{}
+      if ($control.type -ne 'baseline') { throw 'DSH_CONTROL_BASELINE_INVALID' }
+      $pending=@($control.value.queues[$SessionId] | Where-Object {$_ -and $_.placement -in @('queued','steering')})
+      $active=@($control.value.jobs[$SessionId] | Where-Object {$_ -and $_.status -in @('running','stopping')})
+      if ($pending.Count -or $active.Count) { throw 'DSH_SESSION_BUSY' }
       $receipt=Invoke-DshRpc $connection 'session/prompt' @{request=$prompt}
       if ($receipt.accepted -ne $true) { throw 'DSH_PROMPT_NOT_ACCEPTED' }
       @{sessionId=$SessionId;requestId=$RequestId;accepted=$true} | ConvertTo-Json

@@ -1,41 +1,55 @@
 # Codex DSH MCP
 
-Codex 与 DeepSeek Harness Web 的本地 MCP 桥接原型。当前为 **0.1.0 开发原型，非正式稳定版**，不属于 OpenAI 或 DeepSeek 官方项目。
+Codex 规划与独立审核，DeepSeek Harness 实施。本地 stdio MCP，无需 Docker，不抢浏览器标签页。非 OpenAI / DeepSeek 官方项目。
 
-## 当前状态 / Status
+## 状态 / Status
 
-- 已实现：stdio MCP、Web 进程身份检查、会话列表/历史/派单/等待适配、同会话写锁、requestId 去重与不确定投递保护。
-- 已验证：6 项本地测试、MCP 握手；真实 Web 返回 401，认证错误被正确识别。
-- 待验收：真实已认证会话读取、实际派单与完成结果读取。不能把本地测试视为端到端通过。
-- 计划中：DSH 完成后自动通知原 Codex 任务、唤醒独立审核、审核退回和持久重试。**当前版本尚未实现此闭环。**
-- 当前进程发现适配器针对维护者的 Windows 安装布局；其他安装需修改路径，暂不是通用一键安装包。
+**0.2.0 开发版，尚未完成真实双端验收。**
 
-Public source visibility does not establish end-to-end acceptance. Automatic completion notifications to Codex are planned, not available in this revision.
+已实现并有本地测试：会话读取/派单适配、重复请求保护、原 Codex 审核者绑定、每轮完成票据、持久待审核队列、Codex app-server 通知适配、有限重试、审核通过/退回、轮次上限、归档与恢复。完成报告不等于通过审核。
 
-Local stdio MCP for the existing DSH Web installation. No HTTP listener, Docker, browser-tab ownership or DSH restart required.
+本机真实检查仍有两项连接阻塞：DSH Web 返回 AUTH_REQUIRED；Codex 共享 app-server proxy 不可连接。**因此不能宣称本机已能自动唤醒桌面任务。** 不读取浏览器凭据、不修改会话数据库、不启动另一台同名服务绕过。
 
-Tools: `dsh_status`, `dsh_sessions`, `dsh_history`, `dsh_prompt`, `dsh_wait`.
+Development implementation; authenticated live DSH dispatch and notification to the intended Codex runtime remain unverified. No stable Release published.
 
-Configuration: `D:/Servers/AI/Data/Codex/integrations/codex-dsh-mcp/config.json`. Auth is optional for discovery but required by the live DSH service. Supply an explicitly authorized file containing `baseUrl` and exactly one of `launchToken` or `cookie`, using the existing bridge format. The bridge never discovers credentials or reads browser databases/signing secrets. Configure `authFile` only after that file exists. Do not paste credentials in task prompts or commit them.
+## 使用 / Usage
 
-The configured Web process is verified by executable, exact CLI arguments, listener PID and start time on requests. This installation uses loopback port 3080. Changed installation paths require an explicit adapter update.
+See [setup and recovery](docs/OPERATIONS.md), [configuration example](examples/config.example.json), [security](SECURITY.md), and the optional [companion skill](skills/codex-dsh-workflow/SKILL.md).
 
-Submit only to an existing session after checking its project. Running sessions are rejected. A cross-process session lock and durable request fingerprint prevent duplicate local writes; unknown delivery remains unknown until history is inspected. Never delete locks or receipts to retry uncertain writes. A stalled/crashed MCP may leave a lock requiring inspection. The lock does not control tasks submitted through other clients.
+Requires Node 22+, PowerShell 7.2+, the supported Windows DSH Web launch layout, and a reachable Codex app-server proxy for automatic notifications. Paths, port and allowed projects are configurable. Keep DSH_MCP_CONFIG, authentication and state outside this repository.
 
-History is a bounded initial snapshot, not a full export. Waiting observes idle, not success. The project owner must review actual changes and independently verify them.
+```text
+Codex -> workflow_dispatch -> DSH implementation
+                             -> signed completion report
+       <- app-server tool output <- persistent worker
+Codex -> independent review -> accept / bounded rework
+```
 
-Run `node --test test/*.test.mjs` for local protocol/deduplication tests. These do not prove live authentication. Run through MCP `dsh_status`, then `dsh_sessions`, then `dsh_history` before enabling task delegation.
+| Tool | Purpose |
+| --- | --- |
+| dsh_status / codex_status | Live connection diagnosis; no model task created |
+| dsh_sessions / dsh_history / dsh_wait | Bounded observation; idle is not success |
+| dsh_prompt | Existing-session submission with deduplication |
+| workflow_dispatch | Bound dispatch with a completion ticket |
+| workflow_status | Original reviewer's tasks and delivery states |
+| workflow_review | Independent acceptance or bounded rework |
+| workflow_resolve_notification | Resolve uncertain notification after inspecting history |
+| workflow_archive | Archive accepted records; no project deletion |
+| review_bind / review_complete / review_pending | Legacy local unverified inbox, no automatic notification |
 
-No session creation, arbitrary RPC forwarding, settings/model mutation, service restart or automatic cancellation tool is exposed in v0.1.0.
+With autoRunner enabled, dispatch requests a detached completion scanner. Or run `node runner.mjs` manually. Restart the runner after machine restart; no global startup service is installed. Credentials never go in prompts. Tickets are private files. Same-user filesystem access is trusted, not a hostile-process security boundary.
 
-Bridge adaptation provenance: copied from the locally installed dsh-delegator scripts and adapted for this explicitly configured Node Web host; original skill files remain unchanged.
+## Testing
 
-## Local review inbox (development)
+```sh
+npm test
+node doctor.mjs
+```
 
-- `review_bind`: record taskId, originCodexTaskId, dshSessionId and scope before dispatch. This does not dispatch or enforce scope.
-- `review_complete`: record a bounded completion summary for that binding. The report is explicitly unverified and only enters AWAITING_REVIEW.
-- `review_pending`: pull up to 100 pending reports (hasMore indicates truncation). No automatic Codex wakeup is implemented.
+Set TEMP/TMP to a writable temporary directory. Tests cover local protocol, receipts, duplicate writes, stale rounds, rework, notification uncertainty and role binding. They are not live DSH/Codex acceptance.
 
-Bindings and receipts persist outside the repository in the configured state directory. Conflicting bindings/receipts and wrong sessions are rejected. IDs correlate local records; they do NOT authenticate a remote DSH reporter. The inbox currently caps at 1000 records and has no acknowledgement/archive API yet. Stale locks require inspection, not automatic deletion. Scope is advisory, not a sandbox.
+## References
 
-Local tests: 7 passing cases. These do not establish live DSH integration. See [workflow design](docs/WORKFLOW_DESIGN.md).
+[Workflow design](docs/WORKFLOW_DESIGN.md) separates transport, orchestration and optional specialist profiles. Scope prompts are not hooks or a sandbox. Referenced projects were not installed and their code was not imported.
+
+PowerShell bridge provenance: adapted from locally installed dsh-delegator scripts; originals unchanged. Redistribution license selection remains pending; public visibility is not a license grant.

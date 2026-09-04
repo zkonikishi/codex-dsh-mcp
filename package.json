@@ -1,1 +1,1 @@
-{"name":"codex-dsh-mcp","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node --test test/*.test.mjs","start":"node server.mjs"},"engines":{"node":">=22"}}
+{"name":"codex-dsh-mcp","version":"0.2.0","private":true,"type":"module","scripts":{"test":"node --test test/*.test.mjs","start":"node server.mjs","doctor":"node doctor.mjs","worker":"node runner.mjs"},"engines":{"node":">=22"}}

@@ -1,6 +1,15 @@
 # PowerShell 7; current Desktop HTTP + Typert protocol. No secret discovery.
 Set-StrictMode -Version Latest
 
+function Get-DshWebConfig {
+  if (-not $env:DSH_MCP_WEB) { throw 'DSH_WEB_CONFIG_REQUIRED' }
+  $c=$env:DSH_MCP_WEB | ConvertFrom-Json -AsHashtable
+  if (-not $c.node -or -not $c.cli -or -not $c.port -or
+      -not [IO.Path]::IsPathRooted($c.node) -or -not [IO.Path]::IsPathRooted($c.cli) -or
+      $c.port -lt 1 -or $c.port -gt 65535) { throw 'DSH_WEB_CONFIG_REQUIRED' }
+  return $c
+}
+
 function Read-DshUtf8([string]$Path, [int]$MaxBytes = 1048576) {
   $item = Get-Item -LiteralPath $Path -ErrorAction Stop
   if ($item.PSIsContainer -or $item.Length -gt $MaxBytes) { throw 'DSH_INPUT_INVALID: file must be bounded and regular.' }
@@ -17,18 +26,21 @@ function Assert-DshOrigin([string]$Origin) {
 }
 function Test-DshWebOwner($Owner) {
   if (!$Owner) { return $false }
-  $expectedNode='D:\Servers\AI\Data\DSH\environment\node\node.exe'
-  $expectedCli='D:\Program Files\DeepSeek\Deepseek Harness\node_modules\@deepseek-ai\dsh\lib\bin.js'
+  $config=Get-DshWebConfig
+  $expectedNode=$config.node
+  $expectedCli=$config.cli
   if ($Owner.ExecutablePath -ine $expectedNode) { return $false }
   $argv=@([regex]::Matches([string]$Owner.CommandLine,'"([^"]*)"|(\S+)') | ForEach-Object { if($_.Groups[1].Success){$_.Groups[1].Value}else{$_.Groups[2].Value} })
-  $expected=@($expectedNode,$expectedCli,'web','--port','3080','--no-open','--host','127.0.0.1')
+  $expected=@($expectedNode,$expectedCli,'web','--port',[string]$config.port,'--no-open','--host','127.0.0.1')
   if($argv.Count -ne $expected.Count){return $false}
   for($i=0;$i -lt $expected.Count;$i++){if($argv[$i] -ine $expected[$i]){return $false}}
   return $true
 }
 function Get-DshListenerPid {
+  $config=Get-DshWebConfig
+  $pattern='^\s*TCP\s+127\.0\.0\.1:'+([string]$config.port)+'\s+\S+\s+LISTENING\s+(\d+)\s*$'
   $ids=@(& "$env:SystemRoot\System32\netstat.exe" -ano -p tcp | ForEach-Object {
-    if($_ -match '^\s*TCP\s+127\.0\.0\.1:3080\s+\S+\s+LISTENING\s+(\d+)\s*$'){[int]$Matches[1]}
+    if($_ -match $pattern){[int]$Matches[1]}
   } | Select-Object -Unique)
   if($ids.Count -gt 1){throw 'DSH_MULTIPLE_LISTENERS'}
   if($ids.Count -eq 1){return $ids[0]}
@@ -39,7 +51,8 @@ function Get-DshEndpoints {
   if(!$listenerId){throw 'DSH_WEB_NOT_LISTENING: configured loopback endpoint unavailable.'}
   $owner=Get-CimInstance Win32_Process -Filter "ProcessId=$listenerId"
   if(!(Test-DshWebOwner $owner)){throw 'DSH_FOREIGN_LISTENER: listener is not the configured DSH Web process.'}
-  [pscustomobject]@{baseUrl='http://127.0.0.1:3080';processId=$owner.ProcessId;startedAt=$owner.CreationDate;port=3080;address='127.0.0.1'}
+  $config=Get-DshWebConfig
+  [pscustomobject]@{baseUrl="http://127.0.0.1:$($config.port)";processId=$owner.ProcessId;startedAt=$owner.CreationDate;port=$config.port;address='127.0.0.1'}
 }
 function Assert-DshOwner($Endpoint) {
   $owner = Get-CimInstance Win32_Process -Filter "ProcessId=$($Endpoint.processId)" -ErrorAction Stop

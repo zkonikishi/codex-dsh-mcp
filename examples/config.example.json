@@ -1,0 +1,20 @@
+{
+  "powershell": "D:/Tools/PowerShell/pwsh.exe",
+  "stateDirectory": "D:/BridgeData/state",
+  "tempDirectory": "D:/BridgeData/temp",
+  "authFile": "D:/BridgeData/auth/connection.json",
+  "web": {
+    "node": "D:/Tools/Node/node.exe",
+    "cli": "D:/Tools/DSH/node_modules/@deepseek-ai/dsh/lib/bin.js",
+    "port": 3080
+  },
+  "codex": {
+    "command": "D:/Tools/Codex/codex.exe",
+    "home": "D:/CodexData",
+    "socket": "D:/CodexData/app-server.sock"
+  },
+  "allowedProjects": ["D:/Projects/example"],
+  "role": "reviewer",
+  "autoRunner": true,
+  "workflowTimeoutMs": 86400000
+}

@@ -1,6 +1,6 @@
 # Workflow design / 工作流设计
 
-Status: proposed design; no completion callback or host enforcement implemented yet.
+Status: local completion tickets, task state machine, notification adapter and bounded rework are implemented and locally tested. Live authenticated DSH/Codex integration is still blocked. Host-wide tool enforcement is not implemented.
 
 ## Three separate layers
 
