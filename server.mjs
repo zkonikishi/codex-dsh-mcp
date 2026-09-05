@@ -1,4 +1,5 @@
 import { inbox } from './review-inbox.mjs';
+import { webTask } from './web-task.mjs';
 import { loadConfig } from './config.mjs';
 import { dispatch, review, workflowQuery, archive, resolveNotification } from './workflow.mjs';
 import { readCodex } from './codex-notifier.mjs';
@@ -14,6 +15,7 @@ const root=dirname(fileURLToPath(import.meta.url));
 const schema=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
 const id={type:'string',minLength:1,maxLength:128,pattern:'^[A-Za-z0-9_-]+$'};
 export const definitions=[
+  {name:'web_task',description:'Durable ledger for agent-operated ChatGPT browser tasks. Does NOT control a browser or send prompts itself. prepare -> bind -> claim BEFORE Send -> collect visible result -> independently accept. Unknown submission must never be automatically resent. Image/video availability must be observed, not assumed.',inputSchema:schema({taskId:id,action:{type:'string',enum:['prepare','status','bind','claim','collect','accept']},revision:{type:'integer',minimum:1,maximum:100000},kind:{type:'string',enum:['text','image','video']},text:{type:'string',minLength:1,maxLength:65536},browserId:{type:'string',minLength:1,maxLength:256},tabId:{type:'string',minLength:1,maxLength:512},url:{type:'string',minLength:1,maxLength:2048},evidence:{type:'string',minLength:1,maxLength:8192}},['taskId','action'])},
   {name:'workflow_resolve_notification',description:'Original reviewer resolves UNKNOWN/BLOCKED notification only after inspecting Codex history. Retry can duplicate delivery if that inspection was wrong.',inputSchema:schema({taskId:id,round:{type:'integer',minimum:1,maximum:5},action:{type:'string',enum:['acknowledged','retry']},notes:{type:'string',minLength:1,maxLength:8192}},['taskId','round','action','notes'])},
   {name:'workflow_dispatch',description:'Bind and dispatch bounded work to an existing DSH session, with a completion ticket and original Codex reviewer. Requires configured project allowlist and Codex connection.',inputSchema:schema({taskId:id,dshSessionId:id,projectPath:{type:'string',minLength:1,maxLength:2048},scope:{type:'string',minLength:1,maxLength:4096},acceptance:{type:'string',minLength:1,maxLength:4096},text:{type:'string',minLength:1,maxLength:65536},maxRounds:{type:'integer',minimum:1,maximum:5}},['taskId','dshSessionId','projectPath','scope','acceptance','text'])},
   {name:'workflow_status',description:'Read tasks owned by the current Codex reviewer, including notification failures and delivery uncertainty.',inputSchema:schema({taskId:id})},
@@ -85,6 +87,7 @@ export async function callTool(name,args){
   validate(name,args);const c=await config();
   if(c.role==='worker' && !['dsh_status','dsh_sessions','dsh_history','dsh_wait'].includes(name))throw Error('REVIEWER_ONLY');
   const adapters={submit,sessions:cfg=>bridge(cfg,'sessions')};
+  if(name==='web_task')return webTask(c,args);
   if(name==='codex_status')return readCodex(c,process.env.CODEX_THREAD_ID||c.reviewerThreadId);
   if(name==='workflow_dispatch'){const r=await dispatch(c,args,adapters);startRunner(c);return r;}
   if(name==='workflow_review'){const r=await review(c,args,adapters);startRunner(c);return r;}

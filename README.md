@@ -14,6 +14,8 @@ Development implementation; authenticated live DSH dispatch and notification to 
 
 ## 使用 / Usage
 
+新增独立[网页任务通道](docs/WEB_CHANNEL.md)：`web_task` 保存任务、标签页绑定、提交前防重记录和待审核结果；实际网页操作由 Codex 浏览器工具完成，不是无人值守浏览器服务。当前真实页面读取超时，文字往返与图片/视频回收尚未验收。不会凭空宣称账号支持视频。
+
 See [setup and recovery](docs/OPERATIONS.md), [configuration example](examples/config.example.json), [security](SECURITY.md), and the optional [companion skill](skills/codex-dsh-workflow/SKILL.md).
 
 Requires Node 22+, PowerShell 7.2+, the supported Windows DSH Web launch layout, and a reachable Codex app-server proxy for automatic notifications. Paths, port and allowed projects are configurable. Keep DSH_MCP_CONFIG, authentication and state outside this repository.
