@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { webTask, chatUrl } from '../web-task.mjs';
@@ -42,4 +43,23 @@ test('same-chat collection needs marker and response, worker cannot review', () 
   await assert.rejects(call({action:'collect',revision:3,url:'https://chatgpt.com/c/original',text:'result',evidence:'x'}),/MARKER/);
   await assert.rejects(webTask({...c,role:'worker'},{taskId:'example',action:'status'},{CODEX_THREAD_ID:'owner'}),/REVIEWER_ONLY/);
   assert.throws(()=>validate('web_task',{taskId:'x',action:'prepare',cookie:'secret'}),/UNKNOWN_ARGUMENT/);
+}));
+
+test('bounded same-chat rework preserves history and exports accepted result', () => fixture(async call => {
+  let t=await call({action:'prepare',kind:'text',text:'original'});
+  t=await call({action:'bind',revision:t.revision,browserId:'b',tabId:'t',url:'https://chatgpt.com/c/a'});
+  for(let round=1;round<=3;round++) {
+    t=await call({action:'claim',revision:t.revision,url:t.url,evidence:'empty composer'});
+    t=await call({action:'collect',revision:t.revision,url:t.url,evidence:t.marker+' finished',text:'result '+round});
+    if(round<3) t=await call({action:'revise',revision:t.revision,text:'shorter '+round,evidence:'independent changes'});
+  }
+  assert.equal(t.history.length,2);
+  assert.equal((await call({action:'prepare',kind:'text',text:'original'})).round,3);
+  await assert.rejects(call({action:'revise',revision:t.revision,text:'again',evidence:'change'}),/ROUND_LIMIT/);
+  await assert.rejects(call({action:'export',revision:t.revision}),/INVALID_WEB_STATE/);
+  t=await call({action:'accept',revision:t.revision,evidence:'independently read final answer'});
+  t=await call({action:'export',revision:t.revision});
+  const bytes=await readFile(t.exported.path);
+  assert.equal(createHash('sha256').update(bytes).digest('hex'),t.exported.sha256);
+  assert.equal(JSON.parse(bytes).result,'result 3');
 }));

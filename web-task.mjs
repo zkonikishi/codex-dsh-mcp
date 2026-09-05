@@ -1,6 +1,6 @@
-import { transaction } from './workflow-store.mjs';
+import { transaction, atomicJson } from './workflow-store.mjs';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 
 // The browser is driven by the calling agent's supported UI tools, not this process.
 // Observations are claims from that agent, never authenticated website receipts.
@@ -18,18 +18,18 @@ export async function webTask(config, args, env = process.env) {
   const owner = env.CODEX_THREAD_ID || config.reviewerThreadId;
   if (!owner || config.role === 'worker') throw Error('REVIEWER_ONLY');
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(args.taskId || '')) throw Error('INVALID_TASK_ID');
-  return transaction({ ...config, stateDirectory: join(config.stateDirectory, 'web') }, db => {
+  return transaction({ ...config, stateDirectory: join(config.stateDirectory, 'web') }, async (db, root) => {
     let t = Object.hasOwn(db.tasks, args.taskId) ? db.tasks[args.taskId] : undefined;
     if (t && t.owner !== owner) throw Error('OWNER_MISMATCH');
     if (args.action === 'prepare') {
       const prompt = text(args.text, 65536);
       if (!['text', 'image', 'video'].includes(args.kind)) throw Error('INVALID_KIND');
       if (t) {
-        if (t.prompt !== prompt || t.kind !== args.kind) throw Error('TASK_ID_COLLISION');
+        if ((t.initialPrompt || t.prompt) !== prompt || t.kind !== args.kind) throw Error('TASK_ID_COLLISION');
         return structuredClone(t);
       }
       if (Object.keys(db.tasks).length >= 256) throw Error('WEB_TASK_LIMIT');
-      t = { owner, taskId: args.taskId, kind: args.kind, prompt, state: 'PREPARED', revision: 1,
+      t = { owner, taskId: args.taskId, kind: args.kind, prompt, initialPrompt: prompt, round: 1, history: [], state: 'PREPARED', revision: 1,
         marker: 'WEB-' + randomUUID(), created: new Date().toISOString() };
       Object.defineProperty(db.tasks, args.taskId, { value: t, enumerable: true, writable: true, configurable: true });
       return structuredClone(t);
@@ -58,6 +58,23 @@ export async function webTask(config, args, env = process.env) {
       if (!text(args.evidence).includes(t.marker)) throw Error('TASK_MARKER_REQUIRED');
       Object.assign(t, { url, result: text(args.text, 65536), evidence: args.evidence,
         state: 'AWAITING_REVIEW', evidenceLevel: 'agent-observed-unverified' });
+    } else if (args.action === 'revise') {
+      if (t.state !== 'AWAITING_REVIEW') throw Error('INVALID_WEB_STATE');
+      if ((t.round || 1) >= 3) throw Error('WEB_ROUND_LIMIT');
+      const prompt = text(args.text, 65536), review = text(args.evidence);
+      t.history ||= [];
+      t.history.push({ round: t.round || 1, marker: t.marker, prompt: t.prompt, result: t.result, evidence: t.evidence, review });
+      t.initialPrompt ||= t.prompt;
+      t.round = (t.round || 1) + 1;
+      t.prompt = prompt; t.marker = 'WEB-' + randomUUID(); t.state = 'BOUND';
+      delete t.result; delete t.evidence; delete t.submission;
+    } else if (args.action === 'export') {
+      if (t.state !== 'ACCEPTED') throw Error('INVALID_WEB_STATE');
+      const file = join(root, 'result-' + createHash('sha256').update(t.taskId).digest('hex') + '.json');
+      const report = { taskId: t.taskId, kind: t.kind, round: t.round || 1, url: t.url,
+        result: t.result, evidence: t.evidence, review: t.review, evidenceLevel: t.evidenceLevel };
+      await atomicJson(file, report);
+      t.exported = { path: file, sha256: createHash('sha256').update(JSON.stringify(report)).digest('hex') };
     } else if (args.action === 'accept') {
       if (t.state !== 'AWAITING_REVIEW') throw Error('INVALID_WEB_STATE');
       t.review = text(args.evidence); t.state = 'ACCEPTED';

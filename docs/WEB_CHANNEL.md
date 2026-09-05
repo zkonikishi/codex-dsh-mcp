@@ -4,6 +4,9 @@
 它不是在后台自行控制 ChatGPT 的服务，也不借用或导出登录凭据。
 
 State: PREPARED → BOUND → SUBMISSION_UNKNOWN → AWAITING_REVIEW → ACCEPTED.
+`revise` returns an observed result to BOUND in the SAME conversation with a fresh
+marker, preserving history, up to 3 rounds. `export` writes the accepted result
+as private JSON under the state directory and returns a SHA-256.
 Claim is persisted before Send, with revision CAS, task marker, exact conversation
 binding and a tab reservation. Uncertain delivery is never automatically retried.
 Results are agent-reported observations, not signed server receipts.
@@ -21,7 +24,16 @@ standalone unattended browser executor in this slice.
 
 - Local unit tests cover persistence, ownership, revision, duplicate claim,
   URL validation, same-chat result binding and task markers.
-- Live browser attempt: tab inventory works, but ChatGPT page acquisition timed
-  out in both in-app browser and Edge. No prompt was submitted.
-- Live text roundtrip, image/video generation, artifact downloads and automatic
-  return-to-reviewer remain unverified. Do not advertise them as complete.
+- 2026-09-05 OOChat read-only test: a marked text prompt was submitted once in a
+  dedicated ChatGPT conversation; response read and independently checked. A
+  second marked revision in the SAME chat produced the expected shortened text.
+- In the same test, the visible Create Image tool generated a black-cat/bubble
+  concept image. It was visually inspected and exported using supported browser
+  pageAssets. Actual PNG: 1254x1254, 1,541,556 bytes; file integrity checked locally.
+  No private source was uploaded or existing product branding replaced.
+- In-app observations took around 43-65 seconds. Short outer tool timeouts were
+  insufficient; after timeout inspect the page first, NEVER repeat Send blindly.
+  Do not treat longer timeouts as proof that every browser fault is solved.
+- Video: no generation entry visible in the tested menu; not validated.
+- Agent-operated text/rework/image roundtrip passed. This is NOT a standalone
+  browser worker, automatic desktop wakeup, or whole-OOChat product acceptance.
