@@ -1,10 +1,10 @@
-import { JsonRpcClient } from './jsonrpc-client.mjs';
+import { ProxyRpcClient } from './proxy-rpc-client.mjs';
 
 export async function connectCodex(config) {
   if (!config.codex?.command) throw Error('CODEX_NOT_CONFIGURED');
   const args = ['app-server', 'proxy'];
   if (config.codex.socket) args.push('--sock', config.codex.socket);
-  const client = new JsonRpcClient(config.codex.command, args, { env: { ...process.env,
+  const client = await ProxyRpcClient.connect(config.codex.command, args, { env: { ...process.env,
     ...(config.codex.home ? { CODEX_HOME: config.codex.home } : {}),
     TEMP: config.tempDirectory || process.env.TEMP, TMP: config.tempDirectory || process.env.TMP } });
   try { await client.initialize(); return client; }

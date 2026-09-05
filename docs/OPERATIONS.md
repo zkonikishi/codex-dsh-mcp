@@ -43,3 +43,21 @@ DSH must actually run the report command. A model that stops without reporting i
 `role=worker` exposes read-only DSH operations and denies reviewer/write calls at execution. This is an accidental-misuse guard, not a same-user security boundary. Configure DSH completion via the per-task report command rather than sharing a reviewer MCP connection.
 
 The optional companion skill describes coding/review/specialist phases. It is advisory: no host hooks or full filesystem enforcement are installed.
+
+## Proxy transport correction (2026-09-05)
+
+The shared Codex `app-server proxy` transports an HTTP WebSocket Upgrade and
+WebSocket frames, not JSONL. `ProxyRpcClient` uses Node WebSocket over a one-use
+IPv4 loopback relay to the owned proxy subprocess. It never starts another
+app-server or resumes an unloaded task. Closing the connection closes only its
+relay/proxy, not the shared daemon. Direct stdio JSONL tests are not evidence for
+this transport.
+
+Regression evidence: 28 tests passed, including an actual subprocess WebSocket
+handshake and masked request/response, plus failed-proxy cleanup. These are local
+fixtures, not desktop acceptance. The current host still reports DSH_AUTH_REQUIRED
+and an unavailable Codex proxy; automatic desktop review wakeup remains unverified.
+Browser text/image collection previously passed with an agent driving the browser;
+a standalone unattended browser worker is not implemented.
+
+Protocol reference: https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md
