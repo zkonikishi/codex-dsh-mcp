@@ -61,3 +61,9 @@ Browser text/image collection previously passed with an agent driving the browse
 a standalone unattended browser worker is not implemented.
 
 Protocol reference: https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md
+
+### Readiness diagnosis
+`doctor.mjs` distinguishes missing authorization configuration, missing credential
+file, missing control socket, connection failures and unloaded reviewer. It exits
+nonzero unless both services are live. It never reads browser credentials or
+starts a replacement app-server. Local regression suite: 31 passing tests.
